@@ -20,8 +20,11 @@ export function LoginForm() {
         setLoading(true)
 
         try {
-            // Convert ID to email format (lowercase with @fishtory.com)
-            const emailId = id.toLowerCase().replace(/\s+/g, '-')
+            // Convert ID to email format
+            // Strip out all non-alphanumeric characters to form a clean email
+            // e.g. FM-2026-001 -> fm2026001@fishtory.com
+            // e.g. ADMIN-001 -> admin001@fishtory.com
+            const emailId = id.toLowerCase().replace(/[^a-z0-9]/g, '')
             const email = `${emailId}@fishtory.com`
 
             // Attempt to sign in
@@ -32,7 +35,7 @@ export function LoginForm() {
             })
 
             if (error) {
-                alert(`Login failed: ${error.message}`)
+                alert(`Login failed: ${error.message} | Email generated: ${email}`)
                 setLoading(false)
                 return
             }
@@ -78,7 +81,7 @@ export function LoginForm() {
                         <Input
                             id="password"
                             type="password"
-                            placeholder="••••••••"
+                            placeholder="Enter your password"
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
                             required

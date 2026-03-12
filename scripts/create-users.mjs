@@ -13,7 +13,7 @@ async function createUsers() {
 
     // Create Fisherman user
     const { data: fishermanData, error: fishermanError } = await supabase.auth.signUp({
-        email: 'fm-2026-001@fishtory.com',
+        email: 'fm2026001@fishtory.com',
         password: '@FM2026',
         options: {
             data: {
@@ -54,7 +54,7 @@ async function createUsers() {
     }
 
     console.log('\n📝 User mapping:')
-    console.log('   FM-2026-001 → fm-2026-001@fishtory.com (password: @FM2026)')
+    console.log('   FM-2026-001 → fm2026001@fishtory.com (password: @FM2026)')
     console.log('   ADMIN01 → admin01@fishtory.com (password: AD2026)')
 }
 
