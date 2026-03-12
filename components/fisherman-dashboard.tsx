@@ -27,26 +27,38 @@ export function FishermanDashboard() {
     const [location, setLocation] = useState("")
 
     useEffect(() => {
+        // Load from cache first for immediate feedback
+        const cachedReports = localStorage.getItem('fishtory_reports_cache')
+        if (cachedReports) {
+            try {
+                setReports(JSON.parse(cachedReports))
+            } catch (e) {
+                console.error("Failed to parse cached reports", e)
+            }
+        }
+
         // Fetch current user and their reports
-        const fetchUserAndReports = async () => {
+        const fetchUserAndData = async () => {
             const { data: { session } } = await supabase.auth.getSession()
             if (session?.user) {
                 setUser(session.user)
-                fetchReports(session.user.id)
+                // Fetch ALL reports for global visibility as requested
+                fetchReports()
             }
         }
-        fetchUserAndReports()
+        fetchUserAndData()
     }, [activeTab]) // Re-fetch when switching tabs
 
-    const fetchReports = async (userId: string) => {
+    const fetchReports = async () => {
         const { data, error } = await supabase
             .from('reports')
             .select('*')
-            .eq('user_id', userId)
             .order('created_at', { ascending: false })
 
         if (!error && data) {
             setReports(data)
+            // Save to localStorage so they persist after logout/refresh
+            localStorage.setItem('fishtory_reports_cache', JSON.stringify(data))
         }
     }
 
