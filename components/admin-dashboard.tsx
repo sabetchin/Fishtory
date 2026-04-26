@@ -17,7 +17,13 @@ import { supabase } from "@/lib/supabase"
 import dynamic from "next/dynamic"
 import { UserProfile } from "@/components/user-profile"
 import { toast } from "sonner" 
-import { Fish } from "lucide-react"
+import { Fish, MessageCircle } from "lucide-react"
+
+// Dynamic import for Chat Component
+const ChatAndBroadcasts = dynamic(() => import("@/components/chat-and-broadcasts").then(m => m.ChatAndBroadcasts), {
+    ssr: false,
+    loading: () => <div className="h-[500px] w-full bg-slate-100 animate-pulse flex items-center justify-center">Loading Communications...</div>
+})
 
 // Dynamic import for Leaflet map to avoid window undefined error
 const CatchMap = dynamic(() => import("@/components/catch-map"), { 
@@ -40,16 +46,35 @@ const FishermanRegistry = dynamic(() => import("@/components/fisherman-registry"
 export function AdminDashboard() {
     const [reports, setReports] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
+    const [user, setUser] = useState<any>(null)
+    const [fishermenMap, setFishermenMap] = useState<Record<string, { first_name: string, last_name: string }>>({})
+
+    useEffect(() => {
+        const fetchUser = async () => {
+            const { data: { session } } = await supabase.auth.getSession()
+            if (session?.user) {
+                setUser(session.user)
+            }
+        }
+        fetchUser()
+    }, [])
 
     const fetchReports = async () => {
         setLoading(true)
-        const { data, error } = await supabase
-            .from('reports')
-            .select('*')
-            .order('created_at', { ascending: false })
+        const [reportsRes, profilesRes] = await Promise.all([
+            supabase.from('reports').select('*').order('created_at', { ascending: false }),
+            supabase.from('fishermen_profiles').select('user_id, first_name, last_name')
+        ])
 
-        if (!error && data) {
-            setReports(data)
+        if (!reportsRes.error && reportsRes.data) {
+            setReports(reportsRes.data)
+        }
+        if (!profilesRes.error && profilesRes.data) {
+            const map: Record<string, { first_name: string, last_name: string }> = {}
+            profilesRes.data.forEach((p: any) => {
+                if (p.user_id) map[p.user_id] = { first_name: p.first_name || '', last_name: p.last_name || '' }
+            })
+            setFishermenMap(map)
         }
         setLoading(false)
     }
@@ -246,6 +271,9 @@ export function AdminDashboard() {
                     <TabsTrigger value="map" className="whitespace-nowrap">Map View</TabsTrigger>
                     <TabsTrigger value="analytics" className="whitespace-nowrap">Analytics</TabsTrigger>
                     <TabsTrigger value="fishermen" className="whitespace-nowrap">Fishermen Registry</TabsTrigger>
+                    <TabsTrigger value="communications" className="whitespace-nowrap bg-amber-100 text-amber-900 border border-amber-200">
+                        <MessageCircle className="w-4 h-4 mr-2" /> Communications Built-in
+                    </TabsTrigger>
                 </TabsList>
                 <TabsContent value="reports" className="space-y-4">
                     <Card>
@@ -259,8 +287,7 @@ export function AdminDashboard() {
                                     <TableHeader>
                                         <TableRow>
                                             <TableHead>Date</TableHead>
-                                            <TableHead>Fisherman ID</TableHead>
-                                            <TableHead>Boat Name</TableHead>
+                                            <TableHead>Fisherman Name</TableHead>
                                             <TableHead>Species</TableHead>
                                             <TableHead>Weight</TableHead>
                                             <TableHead>Location</TableHead>
@@ -271,18 +298,21 @@ export function AdminDashboard() {
                                     <TableBody>
                                         {loading ? (
                                             <TableRow>
-                                                <TableCell colSpan={8} className="text-center py-8">Loading reports...</TableCell>
+                                                <TableCell colSpan={7} className="text-center py-8">Loading reports...</TableCell>
                                             </TableRow>
                                         ) : reports.length === 0 ? (
                                             <TableRow>
-                                                <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">No reports found.</TableCell>
+                                                <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">No reports found.</TableCell>
                                             </TableRow>
                                         ) : (
                                             reports.map((report) => (
                                                 <TableRow key={report.id}>
                                                     <TableCell className="whitespace-nowrap">{new Date(report.created_at).toLocaleDateString()}</TableCell>
-                                                    <TableCell className="font-medium whitespace-nowrap">{report.fisherman_id}</TableCell>
-                                                    <TableCell className="whitespace-nowrap">{report.boat_name || "—"}</TableCell>
+                                                    <TableCell className="font-medium whitespace-nowrap">
+                                                        {fishermenMap[report.user_id]
+                                                            ? `${fishermenMap[report.user_id].last_name}, ${fishermenMap[report.user_id].first_name}`
+                                                            : report.fisherman_id || '—'}
+                                                    </TableCell>
                                                     <TableCell className="capitalize whitespace-nowrap">{report.species}</TableCell>
                                                     <TableCell className="whitespace-nowrap">{report.weight_kg} kg</TableCell>
                                                     <TableCell className="whitespace-nowrap">{report.location}</TableCell>
@@ -354,6 +384,24 @@ export function AdminDashboard() {
                         </CardHeader>
                         <CardContent>
                             <FishermanRegistry />
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+                <TabsContent value="communications">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Communications & Broadcasts</CardTitle>
+                            <CardDescription>Talk directly with fishermen and post city-wide announcements.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            {user ? (
+                                <ChatAndBroadcasts 
+                                    currentUser={{ id: user.id, name: user.user_metadata?.first_name || 'Admin', role: 'admin' }} 
+                                    role="admin" 
+                                />
+                            ) : (
+                                <div>Authenticating...</div>
+                            )}
                         </CardContent>
                     </Card>
                 </TabsContent>

@@ -10,6 +10,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { supabase } from "@/lib/supabase"
 import { DigitalIdCard } from "@/components/digital-id-card"
+import { VoiceInput } from "@/components/voice-input"
+import { parseTranscript, formatParsedData, getSuggestions, ParsedCatchData } from "@/lib/voice-parser"
+import { savePendingReport } from "@/lib/offline-storage"
+import { useSyncStatus } from "@/lib/sync-manager"
+import dynamic from "next/dynamic"
+
+const ChatAndBroadcasts = dynamic(() => import("@/components/chat-and-broadcasts").then(m => m.ChatAndBroadcasts), {
+    ssr: false,
+    loading: () => <div className="h-[400px] w-full bg-slate-50 animate-pulse flex items-center justify-center rounded-3xl">Loading Communications...</div>
+})
+
 import { 
     PlusCircle, 
     History, 
@@ -20,7 +31,10 @@ import {
     X, 
     LayoutDashboard,
     LogOut,
-    Anchor
+    Anchor,
+    MessageCircle,
+    Wifi,
+    WifiOff
 } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
@@ -39,8 +53,10 @@ export function FishermanDashboard() {
     const [processingMethod, setProcessingMethod] = useState("")
     const [location, setLocation] = useState("")
 
-    const [isListening, setIsListening] = useState(false)
-    const [transcript, setTranscript] = useState("")
+    const [parsedData, setParsedData] = useState<ParsedCatchData | null>(null)
+    const [showSuggestions, setShowSuggestions] = useState(false)
+    const [transcript, setTranscript] = useState('')
+    const syncStatus = useSyncStatus()
 
     useEffect(() => {
         let channel: any;
@@ -147,78 +163,26 @@ export function FishermanDashboard() {
         }
     }
 
-    const startListening = () => {
-        if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-            toast.error("Speech Recognition Not Supported", {
-                description: "Your browser does not support Speech Recognition. Please use Chrome or Edge."
-            })
-            return
+    const handleVoiceTranscript = (text: string) => {
+        setTranscript(text)
+        // Parse the transcript and update form fields
+        const parsed = parseTranscript(text)
+        setParsedData(parsed)
+        
+        // Update form fields with parsed data
+        if (parsed.species) setSpecies(parsed.species)
+        if (parsed.weight) setWeight(parsed.weight)
+        if (parsed.processingMethod) setProcessingMethod(parsed.processingMethod)
+        if (parsed.location) setLocation(parsed.location)
+        
+        // Show suggestions if confidence is low
+        if (parsed.confidence < 0.5) {
+            setShowSuggestions(true)
         }
-
-        const SpeechRecognitionApi = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
-        const recognition = new SpeechRecognitionApi()
-
-        recognition.continuous = false
-        recognition.interimResults = false
-        recognition.lang = 'tl-PH' // Tagalog primary, usually understands English mixed in
-
-        recognition.onstart = () => {
-            setIsListening(true)
-            setTranscript("Listening... Please speak now.")
-        }
-
-        recognition.onresult = (event: any) => {
-            const text = event.results[0][0].transcript.toLowerCase()
-            setTranscript(`Heard: "${text}"`)
-            
-            // --- Parsers ---
-
-            // Species parsing
-            if (text.includes("bangus") || text.includes("milkfish")) setSpecies("bangus")
-            else if (text.includes("tilapia")) setSpecies("tilapia")
-            else if (text.includes("lapu") || text.includes("grouper")) setSpecies("lapu-lapu")
-            else if (text.includes("dilis") || text.includes("anchov")) setSpecies("dilis")
-            else if (text.includes("sardinas") || text.includes("sardine")) setSpecies("sardinas")
-            else if (text.includes("tuna")) setSpecies("tuna")
-
-            // Processing parsing
-            if (text.includes("sariwa") || text.includes("fresh")) setProcessingMethod("fresh")
-            else if (text.includes("tinapa") || text.includes("smoked")) setProcessingMethod("smoked")
-            else if (text.includes("tuyo") || text.includes("dried")) setProcessingMethod("dried")
-            else if (text.includes("daing") || text.includes("salt")) setProcessingMethod("salted")
-
-            // Location parsing
-            if (text.includes("banicain")) setLocation("Banicain")
-            else if (text.includes("barretto") || text.includes("bareto")) setLocation("Barretto")
-            else if (text.includes("kalaklan") || text.includes("calaclan")) setLocation("Kalaklan")
-
-            // Weight parsing (looks for numbers before "kilo" or just standalone numbers if it makes sense)
-            const weightMatch = text.match(/([\d.]+)\s*(kilo|kg|kilograms?)/)
-            if (weightMatch && weightMatch[1]) {
-                setWeight(weightMatch[1])
-            } else {
-                // Try grabbing the first number spoken if no unit was specified
-                const numMatch = text.match(/(\d+(\.\d+)?)/)
-                if (numMatch && numMatch[1]) {
-                    setWeight(numMatch[1])
-                }
-            }
-
-            setTimeout(() => setTranscript(""), 4000)
-        }
-
-        recognition.onerror = (event: any) => {
-            console.error("Speech error", event?.error || "Unknown error")
-            setTranscript("Error: Could not hear clearly.")
-            setIsListening(false)
-            setTimeout(() => setTranscript(""), 3000)
-        }
-
-        recognition.onend = () => {
-            setIsListening(false)
-        }
-
-        recognition.start()
+        
+        toast.success("Voice Processed", {
+            description: formatParsedData(parsed)
+        })
     }
 
     const handleSubmit = async () => {
@@ -237,10 +201,44 @@ export function FishermanDashboard() {
         const fishermanId = user.user_metadata?.fisherman_id || 'Unknown'
         const boatName = user.user_metadata?.boat_name || 'Unknown'
 
-        const { error } = await supabase
-            .from('reports')
-            .insert([
-                {
+        // Check if online
+        if (navigator.onLine) {
+            // Submit directly to Supabase
+            const { error } = await supabase
+                .from('reports')
+                .insert([
+                    {
+                        fisherman_id: fishermanId,
+                        user_id: user.id,
+                        boat_name: boatName,
+                        species,
+                        weight_kg: Number(weight),
+                        processing_method: processingMethod,
+                        location,
+                        status: 'pending'
+                    }
+                ])
+
+            if (error) {
+                toast.error("Submission Failed", {
+                    description: error.message
+                })
+            } else {
+                toast.success("Report Submitted", {
+                    description: "Your catch report has been sent successfully!"
+                })
+                // Reset form
+                setSpecies("")
+                setWeight("")
+                setProcessingMethod("")
+                setLocation("")
+                // Switch to reports tab to see it
+                setActiveTab("my-reports")
+            }
+        } else {
+            // Offline: Save to IndexedDB for later sync
+            try {
+                const reportId = await savePendingReport({
                     fisherman_id: fishermanId,
                     user_id: user.id,
                     boat_name: boatName,
@@ -248,25 +246,24 @@ export function FishermanDashboard() {
                     weight_kg: Number(weight),
                     processing_method: processingMethod,
                     location,
-                    status: 'pending'
-                }
-            ])
-
-        if (error) {
-            toast.error("Submission Failed", {
-                description: error.message
-            })
-        } else {
-            toast.success("Report Submitted", {
-                description: "Your catch report has been sent successfully!"
-            })
-            // Reset form
-            setSpecies("")
-            setWeight("")
-            setProcessingMethod("")
-            setLocation("")
-            // Switch to reports tab to see it
-            setActiveTab("my-reports")
+                    transcript: parsedData ? formatParsedData(parsedData) : undefined
+                })
+                
+                toast.success("Report Saved Offline", {
+                    description: "Your report will be synced when connection is restored."
+                })
+                
+                // Reset form
+                setSpecies("")
+                setWeight("")
+                setProcessingMethod("")
+                setLocation("")
+                setParsedData(null)
+            } catch (error) {
+                toast.error("Save Failed", {
+                    description: "Could not save report offline. Please try again."
+                })
+            }
         }
         setLoading(false)
     }
@@ -284,6 +281,7 @@ export function FishermanDashboard() {
         { id: 'new-report', label: 'New Catch', icon: PlusCircle, description: 'Submit a new report' },
         { id: 'my-reports', label: 'My Reports', icon: History, description: 'View history' },
         { id: 'my-id', label: 'My ID Card', icon: CreditCard, description: 'Digital ID' },
+        { id: 'communications', label: 'Community', icon: MessageCircle, description: 'Chat & Announcements' },
     ]
 
     return (
@@ -341,6 +339,31 @@ export function FishermanDashboard() {
                 </nav>
 
                 <div className="p-6 border-t border-slate-100 space-y-4 bg-slate-50/30">
+                    {/* Sync Status Indicator */}
+                    {!isSidebarCollapsed && (
+                        <div className="p-3 rounded-xl bg-white border border-slate-200">
+                            <div className="flex items-center justify-between mb-2">
+                                <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">Sync Status</span>
+                                {syncStatus.isSyncing && (
+                                    <div className="h-2 w-2 bg-blue-500 rounded-full animate-pulse" />
+                                )}
+                            </div>
+                            <div className="flex items-center gap-2 text-xs text-slate-500">
+                                {syncStatus.pendingCount > 0 ? (
+                                    <>
+                                        <WifiOff className="h-3 w-3 text-amber-500" />
+                                        <span>{syncStatus.pendingCount} pending</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Wifi className="h-3 w-3 text-green-500" />
+                                        <span>All synced</span>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                    )}
+                    
                     <button 
                         onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
                         className="w-full flex items-center gap-4 p-4 rounded-2xl text-slate-400 hover:bg-white hover:text-blue-600 hover:shadow-sm transition-all group border border-transparent hover:border-slate-100"
@@ -479,39 +502,29 @@ export function FishermanDashboard() {
                                                     Fill out the details below
                                                 </CardDescription>
                                             </div>
-                                            <Button 
-                                                variant={isListening ? "destructive" : "outline"}
-                                                onClick={startListening}
-                                                className={cn(
-                                                    "group flex items-center gap-2 px-6 py-6 rounded-2xl transition-all shadow-sm hover:shadow-md h-12",
-                                                    isListening ? "ring-4 ring-red-100" : "bg-white hover:bg-slate-50 border-slate-200"
-                                                )}
-                                            >
-                                                {isListening ? (
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="relative flex h-3 w-3">
-                                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                                                            <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
-                                                        </div>
-                                                        <span className="font-bold">Listening...</span>
-                                                    </div>
-                                                ) : (
-                                                    <>
-                                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-mic"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
-                                                        <span className="font-bold">Use Voice</span>
-                                                    </>
-                                                )}
-                                            </Button>
                                         </div>
-                                        {transcript && (
-                                            <div className="mt-6 p-4 rounded-2xl bg-blue-600/5 border border-blue-600/10 animate-in zoom-in-95 duration-200">
-                                                <div className="flex items-center gap-2 mb-1 text-blue-600">
-                                                    <div className="h-1.5 w-1.5 bg-blue-600 rounded-full animate-pulse" />
-                                                    <span className="text-[10px] font-bold uppercase tracking-wider">Processing Voice...</span>
+                                        <VoiceInput
+                                            onTranscript={handleVoiceTranscript}
+                                            lang="tl-PH"
+                                        />
+                                        {showSuggestions && parsedData && getSuggestions(parsedData).length > 0 && (
+                                            <div className="mt-4 p-4 rounded-2xl bg-amber-50 border border-amber-200">
+                                                <div className="flex items-center gap-2 mb-2 text-amber-700">
+                                                    <span className="text-[10px] font-bold uppercase tracking-wider">Suggestions</span>
                                                 </div>
-                                                <p className="text-sm font-semibold text-blue-900 italic">
-                                                    "{transcript}"
-                                                </p>
+                                                <ul className="text-xs text-amber-800 space-y-1">
+                                                    {getSuggestions(parsedData).map((suggestion, idx) => (
+                                                        <li key={idx}>• {suggestion}</li>
+                                                    ))}
+                                                </ul>
+                                                <Button 
+                                                    variant="ghost" 
+                                                    size="sm" 
+                                                    onClick={() => setShowSuggestions(false)}
+                                                    className="mt-2 text-amber-700 hover:text-amber-900"
+                                                >
+                                                    Dismiss
+                                                </Button>
                                             </div>
                                         )}
                                     </CardHeader>
@@ -706,6 +719,25 @@ export function FishermanDashboard() {
                                         </Button>
                                     </div>
                                 </div>
+                            </div>
+                        )}
+
+                        {activeTab === "communications" && (
+                            <div className="animate-in fade-in zoom-in-95 duration-500">
+                                {user ? (
+                                    <ChatAndBroadcasts 
+                                        currentUser={{ 
+                                            id: user.id, 
+                                            name: user.user_metadata?.first_name 
+                                                ? `${user.user_metadata.first_name} ${user.user_metadata.last_name || ''}` 
+                                                : 'Fisherman', 
+                                            role: 'fisherman' 
+                                        }} 
+                                        role="fisherman" 
+                                    />
+                                ) : (
+                                    <div>Authenticating...</div>
+                                )}
                             </div>
                         )}
                     </div>
