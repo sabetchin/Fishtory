@@ -52,7 +52,7 @@ export function UserProfile() {
       setFirstName(user.user_metadata?.first_name || "")
       setLastName(user.user_metadata?.last_name || "")
       setBoatName(user.user_metadata?.boat_name || "")
-      setContactNumber(user.user_metadata?.contact_number || "")
+      setContactNumber(user.user_metadata?.phone_number || "")
       setLocation(user.user_metadata?.location || "")
 
       // If metadata is incomplete, try to hydrate from fishermen_profiles table
@@ -67,7 +67,7 @@ export function UserProfile() {
           setFirstName(profileRow.first_name || "")
           setLastName(profileRow.last_name || "")
           setBoatName(profileRow.boat_name || "")
-          setContactNumber(profileRow.contact_number || "")
+          setContactNumber(profileRow.phone_number || "")
           setLocation(profileRow.location || "")
         }
       }
@@ -96,7 +96,7 @@ export function UserProfile() {
           last_name: lastName.trim(),
           full_name: fullName,
           boat_name: boatName.trim(),
-          contact_number: contactNumber.trim(),
+          phone_number: contactNumber.trim(),
           location,
         }
       })
@@ -111,7 +111,7 @@ export function UserProfile() {
             first_name: firstName.trim(),
             last_name: lastName.trim(),
             boat_name: boatName.trim(),
-            contact_number: contactNumber.trim(),
+            phone_number: contactNumber.trim(),
             location,
           })
           .eq("user_id", userId)

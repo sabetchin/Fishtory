@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { UserProfile } from "@/components/user-profile"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -82,8 +82,15 @@ export function FishermanDashboard() {
                 fetchReports(currentUser.id)
 
                 // Set up real-time subscription for this specific user's reports
+                const channelName = `fisherman-reports-${currentUser.id}`
+                
+                // Clean up existing channel if it exists
+                if (channel) {
+                    await supabase.removeChannel(channel)
+                }
+                
                 channel = supabase
-                    .channel(`fisherman-reports-${currentUser.id}`)
+                    .channel(channelName)
                     .on(
                         'postgres_changes',
                         { 
@@ -129,7 +136,12 @@ export function FishermanDashboard() {
                             )
                         }
                     )
-                    .subscribe()
+                    .subscribe((status: string) => {
+                        console.log('Real-time subscription status:', status)
+                        if (status === 'SUBSCRIPTION_ERROR') {
+                            console.error('Real-time subscription error for reports table')
+                        }
+                    })
             }
         }
         fetchUserAndData()

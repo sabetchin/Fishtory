@@ -22,18 +22,20 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
-import { Search, Plus, Edit, Trash2, Save, Loader2, X } from "lucide-react"
+import { Search, Plus, Edit, Trash2, Save, Loader2, X, Printer } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { FishermanPrintableReport } from "./fisherman-printable-report"
 
 // Supabase client is imported from @/lib/supabase
 
 interface Fisherman {
   id: string
   fisherman_id: string
-  full_name: string
+  last_name: string
+  first_name: string
   boat_name: string
   location: string
-  contact_number: string
+  phone_number: string
   status: string
   created_at: string
 }
@@ -45,15 +47,26 @@ export function FishermanRegistry() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingFisherman, setEditingFisherman] = useState<Fisherman | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [fishermanToPrint, setFishermanToPrint] = useState<Fisherman | null>(null)
   
   // Form State
   const [formState, setFormState] = useState({
     fisherman_id: "",
-    full_name: "",
+    last_name: "",
+    first_name: "",
     boat_name: "",
     location: "",
-    contact_number: ""
+    phone_number: ""
   })
+
+  // Debounced search handler
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchFishermen(searchQuery)
+    }, 300) // 300ms debounce
+    
+    return () => clearTimeout(timer)
+  }, [searchQuery])
 
   useEffect(() => {
     fetchFishermen()
@@ -96,19 +109,56 @@ export function FishermanRegistry() {
     }
   }, [])
 
-  const fetchFishermen = async () => {
+  const fetchFishermen = async (query: string = "") => {
+    console.log('[Fisherman Registry] Starting fetch with query:', query)
     setLoading(true)
-    const { data, error } = await supabase
-      .from('fishermen_profiles')
-      .select('*')
-      .order('created_at', { ascending: false })
+    
+    try {
+      let supabaseQuery = supabase
+        .from('fishermen_profiles')
+        .select('*')
+      
+      // Server-side filtering with multi-column search using .or() and .ilike()
+      if (query && query.trim() !== "") {
+        const searchTerm = `%${query.trim()}%`
+        console.log('[Fisherman Registry] Applying filter with term:', searchTerm)
+        supabaseQuery = supabaseQuery.or(
+          `last_name.ilike.${searchTerm},first_name.ilike.${searchTerm},fisherman_id.ilike.${searchTerm},boat_name.ilike.${searchTerm},location.ilike.${searchTerm}`
+        )
+      }
+      
+      console.log('[Fisherman Registry] Executing Supabase query...')
+      const { data, error } = await supabaseQuery.order('created_at', { ascending: false })
+      
+      console.log('[Fisherman Registry] Supabase response:', {
+        hasError: !!error,
+        error: error?.message,
+        hasData: !!data,
+        dataCount: data?.length || 0,
+        dataSample: data?.[0] || null
+      })
 
-    if (error) {
-      console.error("Error fetching fishermen:", error)
-    } else {
-      setFishermen(data || [])
+      if (error) {
+        console.error('[Fisherman Registry] Supabase error:', {
+          message: error.message,
+          code: error.code,
+          details: error.details,
+          hint: error.hint
+        })
+        setFishermen([])
+      } else if (!data || data.length === 0) {
+        console.warn('[Fisherman Registry] No data returned from Supabase')
+        setFishermen([])
+      } else {
+        console.log('[Fisherman Registry] Successfully fetched', data.length, 'fishermen')
+        setFishermen(data)
+      }
+    } catch (err) {
+      console.error('[Fisherman Registry] Network or unexpected error:', err)
+      setFishermen([])
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   const handleCreateOrUpdate = async () => {
@@ -119,10 +169,11 @@ export function FishermanRegistry() {
         const { error } = await supabase
           .from('fishermen_profiles')
           .update({
-            full_name: formState.full_name,
+            last_name: formState.last_name,
+            first_name: formState.first_name,
             boat_name: formState.boat_name,
             location: formState.location,
-            contact_number: formState.contact_number,
+            phone_number: formState.phone_number,
             fisherman_id: formState.fisherman_id
           })
           .eq('id', editingFisherman.id)
@@ -135,10 +186,11 @@ export function FishermanRegistry() {
           .insert([
             {
               fisherman_id: formState.fisherman_id,
-              full_name: formState.full_name,
+              last_name: formState.last_name,
+              first_name: formState.first_name,
               boat_name: formState.boat_name,
               location: formState.location,
-              contact_number: formState.contact_number
+              phone_number: formState.phone_number
             }
           ])
 
@@ -147,7 +199,7 @@ export function FishermanRegistry() {
       
       setIsDialogOpen(false)
       setEditingFisherman(null)
-      setFormState({ fisherman_id: "", full_name: "", boat_name: "", location: "", contact_number: "" })
+      setFormState({ fisherman_id: "", last_name: "", first_name: "", boat_name: "", location: "", phone_number: "" })
       // No need to manually fetchFishermen() here as the realtime subscription will handle the UI update
     } catch (error: any) {
       alert("Action failed: " + error.message)
@@ -174,7 +226,7 @@ export function FishermanRegistry() {
 
   const openAddDialog = () => {
     setEditingFisherman(null)
-    setFormState({ fisherman_id: "", full_name: "", boat_name: "", location: "", contact_number: "" })
+    setFormState({ fisherman_id: "", last_name: "", first_name: "", boat_name: "", location: "", phone_number: "" })
     setIsDialogOpen(true)
   }
 
@@ -182,20 +234,14 @@ export function FishermanRegistry() {
     setEditingFisherman(fisherman)
     setFormState({
       fisherman_id: fisherman.fisherman_id,
-      full_name: fisherman.full_name,
+      last_name: fisherman.last_name,
+      first_name: fisherman.first_name,
       boat_name: fisherman.boat_name || "",
       location: fisherman.location || "",
-      contact_number: fisherman.contact_number || ""
+      phone_number: fisherman.phone_number || ""
     })
     setIsDialogOpen(true)
   }
-
-  const filteredFishermen = fishermen.filter(f => 
-    (f.full_name && f.full_name.toLowerCase().includes(searchQuery.toLowerCase())) ||
-    (f.fisherman_id && f.fisherman_id.toLowerCase().includes(searchQuery.toLowerCase())) ||
-    (f.boat_name && f.boat_name.toLowerCase().includes(searchQuery.toLowerCase())) ||
-    (f.location && f.location.toLowerCase().includes(searchQuery.toLowerCase()))
-  )
 
   return (
     <div className="space-y-4">
@@ -235,13 +281,23 @@ export function FishermanRegistry() {
                 />
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="name" className="text-right text-xs sm:text-sm">Name</Label>
+                <Label htmlFor="lastname" className="text-right text-xs sm:text-sm">Last Name</Label>
                 <Input
-                  id="name"
-                  placeholder="Full Name"
+                  id="lastname"
+                  placeholder="Last Name"
                   className="col-span-3"
-                  value={formState.full_name}
-                  onChange={(e) => setFormState({...formState, full_name: e.target.value})}
+                  value={formState.last_name}
+                  onChange={(e) => setFormState({...formState, last_name: e.target.value})}
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="firstname" className="text-right text-xs sm:text-sm">First Name</Label>
+                <Input
+                  id="firstname"
+                  placeholder="First Name"
+                  className="col-span-3"
+                  value={formState.first_name}
+                  onChange={(e) => setFormState({...formState, first_name: e.target.value})}
                 />
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
@@ -270,8 +326,8 @@ export function FishermanRegistry() {
                   id="contact"
                   placeholder="Mobile Number"
                   className="col-span-3"
-                  value={formState.contact_number}
-                  onChange={(e) => setFormState({...formState, contact_number: e.target.value})}
+                  value={formState.phone_number}
+                  onChange={(e) => setFormState({...formState, phone_number: e.target.value})}
                 />
               </div>
             </div>
@@ -290,7 +346,8 @@ export function FishermanRegistry() {
           <TableHeader>
             <TableRow>
               <TableHead>Fisherman ID</TableHead>
-              <TableHead>Full Name</TableHead>
+              <TableHead>Last Name</TableHead>
+              <TableHead>First Name</TableHead>
               <TableHead>Boat Name</TableHead>
               <TableHead>Location</TableHead>
               <TableHead>Contact</TableHead>
@@ -304,22 +361,32 @@ export function FishermanRegistry() {
                   <Loader2 className="h-6 w-6 animate-spin mx-auto text-blue-600" />
                 </TableCell>
               </TableRow>
-            ) : filteredFishermen.length === 0 ? (
+            ) : fishermen.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={6} className="text-center py-8 text-slate-500 font-medium">
                   No fishermen found.
                 </TableCell>
               </TableRow>
             ) : (
-              filteredFishermen.map((f) => (
+              fishermen.map((f: Fisherman) => (
                 <TableRow key={f.id}>
                   <TableCell className="font-medium text-blue-700">{f.fisherman_id}</TableCell>
-                  <TableCell>{f.full_name}</TableCell>
+                  <TableCell>{f.last_name}</TableCell>
+                  <TableCell>{f.first_name}</TableCell>
                   <TableCell>{f.boat_name || "N/A"}</TableCell>
                   <TableCell>{f.location || "N/A"}</TableCell>
-                  <TableCell>{f.contact_number || "N/A"}</TableCell>
+                  <TableCell>{f.phone_number || "N/A"}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        onClick={() => setFishermanToPrint(f)}
+                        className="h-8 w-8 text-slate-600 hover:text-green-600"
+                        title="Download Analytics PDF"
+                      >
+                        <Printer className="h-4 w-4" />
+                      </Button>
                       <Button 
                         variant="ghost" 
                         size="icon" 
@@ -344,6 +411,12 @@ export function FishermanRegistry() {
           </TableBody>
         </Table>
       </div>
+      <FishermanPrintableReport 
+        fisherman={fishermanToPrint}
+        onFinished={() => {
+          setFishermanToPrint(null)
+        }}
+      />
     </div>
   )
 }

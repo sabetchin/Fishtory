@@ -59,9 +59,13 @@ export function LoginForm() {
             })
 
             if (error) {
-                console.error('Supabase Auth Error:', error)
+                console.error('Supabase Auth Error:', {
+                    message: error.message,
+                    code: error.status,
+                    details: error
+                })
                 toast.error("Login failed", {
-                    description: error.message
+                    description: error.message || "Authentication failed. Please check your credentials."
                 })
                 setLoading(false)
                 return

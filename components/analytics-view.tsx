@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useRef } from "react"
+import { useMemo, useRef, useState } from "react"
 import {
   BarChart,
   Bar,
@@ -14,14 +14,14 @@ import {
 } from "recharts"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Download, FileText, Printer } from "lucide-react"
+import { Download, FileText, Printer, Loader2 } from "lucide-react"
 import { format, startOfWeek, endOfWeek, eachDayOfInterval, subDays, subMonths, isSameDay, startOfMonth, endOfMonth, eachMonthOfInterval, subYears, isSameMonth } from "date-fns"
 import { jsPDF } from "jspdf"
 import html2canvas from "html2canvas-pro"
 
 interface Report {
-  id: string
-  fisherman_id: string
+  first_name: string
+  last_name: string
   species: string
   weight_kg: number
   location: string
@@ -30,7 +30,7 @@ interface Report {
 }
 
 export default function AnalyticsView({ reports }: { reports: Report[] }) {
-  const reportRef = useRef<HTMLDivElement>(null)
+  const [isGenerating, setIsGenerating] = useState(false)
 
   // Filter only approved reports for analytics
   const approvedReports = useMemo(() => reports.filter(r => r.status === 'approved'), [reports])
@@ -97,72 +97,45 @@ export default function AnalyticsView({ reports }: { reports: Report[] }) {
     })
   }, [approvedReports])
 
+  // PDF specific data calculations
+  const grandTotalCatch = useMemo(() => {
+    return approvedReports.reduce((sum, r) => sum + Number(r.weight_kg || 0), 0)
+  }, [approvedReports])
+
+  const speciesBreakdown = useMemo(() => {
+    const counts: Record<string, number> = {}
+    approvedReports.forEach(r => {
+      const sp = r.species || 'Unknown'
+      counts[sp] = (counts[sp] || 0) + Number(r.weight_kg || 0)
+    })
+    return Object.entries(counts)
+      .sort((a, b) => b[1] - a[1]) // highest to lowest
+  }, [approvedReports])
+
   const exportPDF = async () => {
-    if (!reportRef.current) return
-    
-    try {
-      console.log("Starting PDF export with html2canvas-pro...")
-      // Show simple feedback
-      const btn = document.activeElement as HTMLButtonElement
-      const originalText = btn?.innerText || "Download PDF"
-      if (btn) {
-        btn.innerText = "Generating..."
-        btn.disabled = true
-      }
-
-      // Capture the element
-      const canvas = await html2canvas(reportRef.current, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: '#ffffff',
-        windowWidth: 1200 
-      })
-
-      // Manually convert canvas to grayscale for B&W report
-      const ctx = canvas.getContext('2d')
-      if (ctx) {
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
-        const data = imageData.data
-        for (let i = 0; i < data.length; i += 4) {
-          const avg = (data[i] + data[i + 1] + data[i + 2]) / 3
-          data[i] = avg     // R
-          data[i + 1] = avg // G
-          data[i + 2] = avg // B
+    setIsGenerating(true)
+    setTimeout(async () => {
+      const element = document.getElementById("analytics-pdf-container")
+      if (element) {
+        try {
+          const canvas = await html2canvas(element, { scale: 2, useCORS: true })
+          const imgData = canvas.toDataURL("image/png")
+          const pdf = new jsPDF("p", "mm", "a4")
+          const pdfWidth = pdf.internal.pageSize.getWidth()
+          const pdfHeight = (canvas.height * pdfWidth) / canvas.width
+          
+          pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight)
+          pdf.save(`City_Wide_Analytics_${format(new Date(), 'yyyy-MM-dd')}.pdf`)
+        } catch (error: any) {
+          console.error("PDF Export Error:", error)
+          alert("Failed to generate PDF: " + error.message)
+        } finally {
+          setIsGenerating(false)
         }
-        ctx.putImageData(imageData, 0, 0)
+      } else {
+        setIsGenerating(false)
       }
-
-      const imgData = canvas.toDataURL('image/png')
-      const pdf = new jsPDF('p', 'mm', 'a4')
-      const pdfWidth = pdf.internal.pageSize.getWidth()
-      const pdfHeight = pdf.internal.pageSize.getHeight()
-      
-      const imgProps = pdf.getImageProperties(imgData)
-      const ratio = Math.min(pdfWidth / imgProps.width, (pdfHeight - 20) / imgProps.height)
-      const width = imgProps.width * ratio
-      const height = imgProps.height * ratio
-      
-      const x = (pdfWidth - width) / 2
-      const y = 10 
-
-      pdf.addImage(imgData, 'PNG', x, y, width, height)
-      pdf.save(`Fishtory_BW_Analysis_${format(new Date(), 'yyyy-MM-dd')}.pdf`)
-      
-      // Feedback
-      if (btn) {
-        btn.innerText = originalText
-        btn.disabled = false
-      }
-      console.log("PDF export complete.")
-    } catch (error: any) {
-      console.error("PDF Export Error:", error)
-      alert("Failed to generate PDF: " + error.message)
-      const btn = document.activeElement as HTMLButtonElement
-      if (btn) {
-        btn.disabled = false
-        btn.innerText = "Download PDF"
-      }
-    }
+    }, 500)
   }
 
   const printReport = () => {
@@ -181,14 +154,14 @@ export default function AnalyticsView({ reports }: { reports: Report[] }) {
             <Printer className="h-4 w-4" />
             Print
           </Button>
-          <Button size="sm" onClick={exportPDF} className="flex gap-2 bg-blue-700 hover:bg-blue-800">
-            <Download className="h-4 w-4" />
-            Download PDF
+          <Button size="sm" onClick={exportPDF} disabled={isGenerating} className="flex gap-2 bg-blue-700 hover:bg-blue-800">
+            {isGenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+            {isGenerating ? "Generating..." : "Download PDF"}
           </Button>
         </div>
       </div>
 
-      <div ref={reportRef} className="space-y-8 p-4 bg-white">
+      <div className="space-y-8 p-4 bg-white">
         <div className="grid gap-6 md:grid-cols-2">
             {/* Weekly Chart */}
             <Card className="border-slate-200">
@@ -256,12 +229,72 @@ export default function AnalyticsView({ reports }: { reports: Report[] }) {
                 </ResponsiveContainer>
             </CardContent>
         </Card>
+      </div>
 
-        {/* PDF Metadata (Visible only on top of PDF/Print or hidden if desired) */}
-        <div className="hidden print:block border-t pt-4 mt-8">
-            <p className="text-xs text-slate-500 text-center">
-                Generated by Fishtory Management System - {format(new Date(), 'PPPP p')}
+      {/* Hidden Renderable PDF Blueprint */}
+      <div className="fixed -z-50 opacity-0 pointer-events-none top-0 left-0">
+        <div id="analytics-pdf-container" className="bg-white text-black font-serif p-10 w-[794px] min-h-[1123px]">
+          {/* Header */}
+          <div className="flex justify-between items-start border-b-2 border-black pb-4 mb-8">
+            <div>
+              <h1 className="text-2xl font-bold uppercase">CITY-WIDE AGGREGATE</h1>
+              <p className="text-sm">Regional Fisheries Management Office</p>
+            </div>
+            <div className="text-right">
+              <p className="text-sm">Report Date: {format(new Date(), 'MMMM d, yyyy')}</p>
+            </div>
+          </div>
+
+          <div className="text-center mb-10">
+            <h2 className="text-xl font-bold underline tracking-wide uppercase">City-Wide Catch Analytics Report</h2>
+          </div>
+
+          <div className="mb-10 pl-4" style={{ borderLeft: '4px solid black' }}>
+            <h3 className="text-lg font-bold uppercase mb-3">Executive Summary</h3>
+            <p className="text-justify leading-relaxed text-sm">
+              This document represents the consolidated catch activities strictly authenticated by the municipal office. The data encapsulates all validated regional submissions. The total cumulative weight metrics and the hierarchical breakdown of the dominant species caught during this operational period provide an integral framework for environmental audits and sustainable resource allocation.
             </p>
+          </div>
+
+          {/* Core Analytics */}
+          <div className="space-y-4 mb-12 text-sm">
+            <h3 className="text-lg font-bold uppercase mb-4 border-b border-black pb-2">Core Metrics</h3>
+            <div className="flex pb-3 bg-slate-100 p-3 font-bold text-lg">
+              <div className="w-2/3 uppercase">Grand Total Catch Volume:</div>
+              <div className="w-1/3 text-right">{grandTotalCatch.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kg</div>
+            </div>
+            <div className="flex pb-3 pl-3">
+              <div className="w-2/3">Total Registered & Validated Submissions:</div>
+              <div className="w-1/3 text-right">{approvedReports.length} Reports</div>
+            </div>
+          </div>
+
+          {/* Species Breakdown */}
+          <div className="pl-4 pb-12" style={{ borderLeft: '4px solid black' }}>
+            <h3 className="text-lg font-bold uppercase mb-4">Species Yield Distribution</h3>
+            <p className="text-xs mb-4 italic text-gray-700">Calculated yield sequenced precisely from maximum to minimum harvested mass.</p>
+            
+            <div className="border border-black">
+              <div className="flex font-bold border-b border-black bg-gray-100 p-2 text-sm uppercase">
+                <div className="w-2/3">Species Identity</div>
+                <div className="w-1/3 text-right">Aggregate Weight (kg)</div>
+              </div>
+              {speciesBreakdown.length > 0 ? (
+                speciesBreakdown.map(([species, weight], index) => (
+                  <div key={species} className={`flex p-2 text-sm ${index < speciesBreakdown.length - 1 ? 'border-b border-gray-300' : ''}`}>
+                    <div className="w-2/3 capitalize">{species}</div>
+                    <div className="w-1/3 text-right">{weight.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kg</div>
+                  </div>
+                ))
+              ) : (
+                <div className="p-4 text-center italic text-sm">No catch data available.</div>
+              )}
+            </div>
+          </div>
+
+          <div className="text-xs text-center border-t border-black pt-4 mt-8 opacity-75 italic">
+             Document formulated automatically via standard municipal algorithms. Unauthorized tampering is forbidden.
+          </div>
         </div>
       </div>
     </div>

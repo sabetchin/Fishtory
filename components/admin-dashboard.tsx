@@ -16,6 +16,7 @@ import {
 import { supabase } from "@/lib/supabase"
 import dynamic from "next/dynamic"
 import { UserProfile } from "@/components/user-profile"
+import { DownloadReportsButton } from "@/components/download-reports-button"
 import { toast } from "sonner" 
 import { Fish, MessageCircle } from "lucide-react"
 
@@ -278,8 +279,13 @@ export function AdminDashboard() {
                 <TabsContent value="reports" className="space-y-4">
                     <Card>
                         <CardHeader>
-                            <CardTitle>Recent Catch Reports</CardTitle>
-                            <CardDescription>Review and approve daily catch submissions.</CardDescription>
+                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                                <div>
+                                    <CardTitle>Recent Catch Reports</CardTitle>
+                                    <CardDescription>Review and approve daily catch submissions.</CardDescription>
+                                </div>
+                                <DownloadReportsButton />
+                            </div>
                         </CardHeader>
                         <CardContent>
                             <div className="overflow-x-auto w-full">

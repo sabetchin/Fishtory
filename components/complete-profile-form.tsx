@@ -112,7 +112,7 @@ export function CompleteProfileForm() {
                         first_name: firstName.trim(),
                         last_name: lastName.trim(),
                         boat_name: boatName.trim(),
-                        contact_number: contactNumber.trim(),
+                        phone_number: contactNumber.trim(),
                         location,
                     }])
 
