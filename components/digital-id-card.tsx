@@ -15,6 +15,12 @@ interface FishermanProfile {
     location: string
     email: string
     issued_year: string
+    stats?: {
+        grandTotal: number;
+        totalReports: number;
+        topSpecies: string;
+        leastSpecies: string;
+    }
 }
 
 export function DigitalIdCard() {
@@ -37,6 +43,35 @@ export function DigitalIdCard() {
                 .eq("user_id", user.id)
                 .single()
 
+            // Fetch reports for stats
+            const { data: reports } = await supabase
+                .from("reports")
+                .select("*")
+                .eq("user_id", user.id)
+
+            let grandTotal = 0;
+            let totalReports = 0;
+            let topSpecies = "N/A";
+            let leastSpecies = "N/A";
+
+            if (reports && reports.length > 0) {
+                totalReports = reports.length;
+                const speciesCount: Record<string, number> = {};
+                reports.forEach((r: any) => {
+                    if (r.status === 'approved') {
+                        grandTotal += Number(r.weight_kg || 0);
+                        const sp = r.species || 'Unknown';
+                        speciesCount[sp] = (speciesCount[sp] || 0) + Number(r.weight_kg || 0);
+                    }
+                });
+
+                const entries = Object.entries(speciesCount).sort((a, b) => b[1] - a[1]);
+                if (entries.length > 0) {
+                    topSpecies = entries[0][0];
+                    leastSpecies = entries[entries.length - 1][0];
+                }
+            }
+
             const yearStr = meta.fisherman_id
                 ? meta.fisherman_id.split("-")[1] || new Date().getFullYear().toString()
                 : new Date().getFullYear().toString()
@@ -50,6 +85,12 @@ export function DigitalIdCard() {
                 location: profileRow?.location || meta.location || "—",
                 email: user.email || "—",
                 issued_year: yearStr,
+                stats: {
+                    grandTotal,
+                    totalReports,
+                    topSpecies,
+                    leastSpecies
+                }
             })
             setLoading(false)
         }
@@ -173,13 +214,7 @@ export function DigitalIdCard() {
                         
                         <div className="p-3 bg-white rounded-xl shadow-sm border border-slate-100 mt-6 pointer-events-none">
                             <QRCode 
-                                value={JSON.stringify({
-                                    id: profile.fisherman_id,
-                                    name: fullName,
-                                    boat: profile.boat_name,
-                                    location: profile.location,
-                                    issued: profile.issued_year
-                                })}
+                                value={typeof window !== 'undefined' ? `${window.location.origin}/id/${profile.fisherman_id}` : `https://fishtory.com/id/${profile.fisherman_id}`}
                                 size={110}
                                 level="M"
                             />
