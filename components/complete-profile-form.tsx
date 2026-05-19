@@ -48,7 +48,7 @@ export function CompleteProfileForm() {
             // Generate the next ID for this year
             const year = new Date().getFullYear()
             const { data: latestIds, error } = await supabase
-                .from("fishermen_profiles")
+                .from("fisherman_registration")
                 .select("fisherman_id")
                 .like("fisherman_id", `FM-${year}-%`)
                 .order("fisherman_id", { ascending: false })
@@ -103,9 +103,9 @@ export function CompleteProfileForm() {
                 const paddedNum = String(currentNum).padStart(4, "0")
                 insertedId = `FM-${year}-${paddedNum}`
 
-                // 1. Insert row into fishermen_profiles
+                // 1. Insert row into fisherman_registration
                 const { error: insertError } = await supabase
-                    .from("fishermen_profiles")
+                    .from("fisherman_registration")
                     .insert([{
                         user_id: user.id,
                         fisherman_id: insertedId,

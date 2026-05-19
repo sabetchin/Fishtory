@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js'
+import { createBrowserClient } from '@supabase/ssr'
 
 const FALLBACK_URL = 'https://gxqhdqampmfxuahiiign.supabase.co'
 const FALLBACK_KEY = 'sb_publishable__t4cA-UTDNL4g2t_7M6neQ_181oXxFF'
@@ -50,7 +50,7 @@ if (typeof window !== 'undefined') {
 
 const createResilientClient = () => {
   if (isSupabaseConfigured) {
-    return createClient(supabaseUrl, supabaseAnonKey)
+    return createBrowserClient(supabaseUrl, supabaseAnonKey)
   }
   
   // Return a proxy that throws a clear error if any property (like .auth) is accessed

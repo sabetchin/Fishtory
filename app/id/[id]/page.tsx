@@ -38,7 +38,7 @@ export default function FishermanPublicProfile() {
             
             // 1. Fetch Profile
             const { data: profileData, error: profileError } = await supabase
-                .from("fishermen_profiles")
+                .from("fisherman_registration")
                 .select("*")
                 .eq("fisherman_id", id)
                 .single()

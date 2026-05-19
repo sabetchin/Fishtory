@@ -76,7 +76,7 @@ export function FishermanRegistry() {
       .channel('fisherman-registry-changes')
       .on(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'fishermen_profiles' },
+        { event: 'INSERT', schema: 'public', table: 'fisherman_registration' },
         (payload: any) => {
           console.log('New fisherman registered:', payload)
           setFishermen((current) => [payload.new, ...current])
@@ -84,7 +84,7 @@ export function FishermanRegistry() {
       )
       .on(
         'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'fishermen_profiles' },
+        { event: 'UPDATE', schema: 'public', table: 'fisherman_registration' },
         (payload: any) => {
           console.log('Fisherman profile updated:', payload)
           setFishermen((current) =>
@@ -94,7 +94,7 @@ export function FishermanRegistry() {
       )
       .on(
         'postgres_changes',
-        { event: 'DELETE', schema: 'public', table: 'fishermen_profiles' },
+        { event: 'DELETE', schema: 'public', table: 'fisherman_registration' },
         (payload: any) => {
           console.log('Fisherman profile deleted:', payload)
           setFishermen((current) =>
@@ -115,7 +115,7 @@ export function FishermanRegistry() {
     
     try {
       let supabaseQuery = supabase
-        .from('fishermen_profiles')
+        .from('fisherman_registration')
         .select('*')
       
       // Server-side filtering with multi-column search using .or() and .ilike()
@@ -167,7 +167,7 @@ export function FishermanRegistry() {
       if (editingFisherman) {
         // Update
         const { error } = await supabase
-          .from('fishermen_profiles')
+          .from('fisherman_registration')
           .update({
             last_name: formState.last_name,
             first_name: formState.first_name,
@@ -182,7 +182,7 @@ export function FishermanRegistry() {
       } else {
         // Create
         const { error } = await supabase
-          .from('fishermen_profiles')
+          .from('fisherman_registration')
           .insert([
             {
               fisherman_id: formState.fisherman_id,
@@ -213,7 +213,7 @@ export function FishermanRegistry() {
     
     setLoading(true)
     const { error } = await supabase
-      .from('fishermen_profiles')
+      .from('fisherman_registration')
       .delete()
       .eq('id', id)
 

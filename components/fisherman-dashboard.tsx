@@ -59,8 +59,6 @@ export function FishermanDashboard() {
     const syncStatus = useSyncStatus()
 
     useEffect(() => {
-        let channel: any;
-
         // Fetch current user and their reports
         const fetchUserAndData = async () => {
             const { data: { session } } = await supabase.auth.getSession()
@@ -80,68 +78,6 @@ export function FishermanDashboard() {
 
                 // Fetch only the reports for this specific user
                 fetchReports(currentUser.id)
-
-                // Set up real-time subscription for this specific user's reports
-                const channelName = `fisherman-reports-${currentUser.id}`
-                
-                // Clean up existing channel if it exists
-                if (channel) {
-                    await supabase.removeChannel(channel)
-                }
-                
-                channel = supabase
-                    .channel(channelName)
-                    .on(
-                        'postgres_changes',
-                        { 
-                            event: 'INSERT', 
-                            schema: 'public', 
-                            table: 'reports',
-                            filter: `user_id=eq.${currentUser.id}`
-                        },
-                        (payload: any) => {
-                            console.log('New report received:', payload)
-                            setReports((current) => [payload.new, ...current])
-                        }
-                    )
-                    .on(
-                        'postgres_changes',
-                        { 
-                            event: 'UPDATE', 
-                            schema: 'public', 
-                            table: 'reports',
-                            filter: `user_id=eq.${currentUser.id}`
-                        },
-                        (payload: any) => {
-                            console.log('Report updated:', payload)
-                            setReports((current) =>
-                                current.map((report) =>
-                                    report.id === payload.new.id ? payload.new : report
-                                )
-                            )
-                        }
-                    )
-                    .on(
-                        'postgres_changes',
-                        { 
-                            event: 'DELETE', 
-                            schema: 'public', 
-                            table: 'reports',
-                            filter: `user_id=eq.${currentUser.id}`
-                        },
-                        (payload: any) => {
-                            console.log('Report deleted:', payload)
-                            setReports((current) =>
-                                current.filter((report) => report.id !== payload.old.id)
-                            )
-                        }
-                    )
-                    .subscribe((status: string) => {
-                        console.log('Real-time subscription status:', status)
-                        if (status === 'SUBSCRIPTION_ERROR') {
-                            console.error('Real-time subscription error for reports table')
-                        }
-                    })
             }
         }
         fetchUserAndData()
@@ -150,16 +86,86 @@ export function FishermanDashboard() {
         const { data: { subscription: authListener } } = supabase.auth.onAuthStateChange((_event: any, session: any) => {
             if (session?.user) {
                 setUser(session.user)
+            } else {
+                setUser(null)
+                setReports([])
             }
         })
 
         return () => {
-            if (channel) {
-                supabase.removeChannel(channel)
-            }
             authListener?.unsubscribe()
         }
     }, []) // Run only once on mount
+
+    // Separate useEffect for Real-time Subscription based on user.id
+    useEffect(() => {
+        // Safety check: Don't subscribe if user is not loaded
+        if (!user?.id) return
+
+        // Create a completely unique channel name to prevent StrictMode caching errors
+        const channelName = `fisherman-reports-${user.id}-${Date.now()}`
+        
+        // Chain .on completely before calling .subscribe
+        const channel = supabase.channel(channelName)
+            .on(
+                'postgres_changes',
+                { 
+                    event: 'INSERT', 
+                    schema: 'public', 
+                    table: 'reports',
+                    filter: `user_id=eq.${user.id}`
+                },
+                (payload: any) => {
+                    console.log('New report received:', payload)
+                    setReports((current) => [payload.new, ...current])
+                }
+            )
+            .on(
+                'postgres_changes',
+                { 
+                    event: 'UPDATE', 
+                    schema: 'public', 
+                    table: 'reports',
+                    filter: `user_id=eq.${user.id}`
+                },
+                (payload: any) => {
+                    console.log('Report updated:', payload)
+                    setReports((current) =>
+                        current.map((report) =>
+                            report.id === payload.new.id ? payload.new : report
+                        )
+                    )
+                }
+            )
+            .on(
+                'postgres_changes',
+                { 
+                    event: 'DELETE', 
+                    schema: 'public', 
+                    table: 'reports',
+                    filter: `user_id=eq.${user.id}`
+                },
+                (payload: any) => {
+                    console.log('Report deleted:', payload)
+                    setReports((current) =>
+                        current.filter((report) => report.id !== payload.old.id)
+                    )
+                }
+            )
+
+        // Now subscribe
+        channel.subscribe((status: string) => {
+            console.log('Real-time subscription status:', status)
+            if (status === 'SUBSCRIPTION_ERROR') {
+                console.error('Real-time subscription error for reports table')
+            }
+        })
+
+        // Proper cleanup function when component unmounts or user changes
+        return () => {
+            supabase.removeChannel(channel)
+        }
+    }, [user?.id])
 
     const fetchReports = async (userId: string) => {
         const { data, error } = await supabase
@@ -222,6 +228,7 @@ export function FishermanDashboard() {
                     {
                         fisherman_id: fishermanId,
                         user_id: user.id,
+                        submitted_by: user.id,
                         boat_name: boatName,
                         species,
                         weight_kg: Number(weight),

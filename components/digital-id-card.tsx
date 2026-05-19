@@ -36,9 +36,9 @@ export function DigitalIdCard() {
 
             const meta = user.user_metadata || {}
 
-            // Try to get more data from fishermen_profiles table
+            // Try to get more data from fisherman_registration table
             const { data: profileRow } = await supabase
-                .from("fishermen_profiles")
+                .from("fisherman_registration")
                 .select("*")
                 .eq("user_id", user.id)
                 .single()

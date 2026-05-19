@@ -55,10 +55,10 @@ export function UserProfile() {
       setContactNumber(user.user_metadata?.phone_number || "")
       setLocation(user.user_metadata?.location || "")
 
-      // If metadata is incomplete, try to hydrate from fishermen_profiles table
+      // If metadata is incomplete, try to hydrate from fisherman_registration table
       if (!user.user_metadata?.boat_name && user.user_metadata?.fisherman_id) {
         const { data: profileRow } = await supabase
-          .from("fishermen_profiles")
+          .from("fisherman_registration")
           .select("*")
           .eq("user_id", user.id)
           .single()
@@ -103,10 +103,10 @@ export function UserProfile() {
 
       if (authError) throw authError
 
-      // 2. Also update the fishermen_profiles row (if it exists)
+      // 2. Also update the fisherman_registration row (if it exists)
       if (userId && fishermanId) {
         const { error: dbError } = await supabase
-          .from("fishermen_profiles")
+          .from("fisherman_registration")
           .update({
             first_name: firstName.trim(),
             last_name: lastName.trim(),
@@ -117,7 +117,7 @@ export function UserProfile() {
           .eq("user_id", userId)
 
         if (dbError) {
-          console.warn("fishermen_profiles update warning:", dbError.message)
+          console.warn("fisherman_registration update warning:", dbError.message)
           // Non-fatal: metadata is already updated
         }
       }

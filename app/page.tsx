@@ -28,7 +28,7 @@ export default function Home() {
                 </div>
 
                 {/* Entry Pathways */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-4xl px-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-6xl px-4">
                     
                     {/* Fisherman Card */}
                     <div className="group relative bg-white p-8 rounded-3xl shadow-xl shadow-blue-900/5 border border-slate-100 transition-all hover:-translate-y-1 hover:shadow-2xl hover:shadow-blue-900/10 flex flex-col items-center text-center">
@@ -47,18 +47,35 @@ export default function Home() {
                         </Link>
                     </div>
 
+                    {/* Staff Card */}
+                    <div className="group relative bg-white p-8 rounded-3xl shadow-xl shadow-blue-900/5 border border-slate-100 transition-all hover:-translate-y-1 hover:shadow-2xl hover:shadow-green-900/10 flex flex-col items-center text-center">
+                        <div className="h-12 w-12 bg-green-50 rounded-2xl flex items-center justify-center mb-6 text-green-600 group-hover:scale-110 group-hover:bg-green-100 transition-all">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-users"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                        </div>
+                        <h2 className="text-2xl font-bold text-slate-800 mb-3">Staff Portal</h2>
+                        <p className="text-slate-500 mb-8 flex-1">
+                            Access the staff dashboard to register fishermen profiles and submit data directly to the central registry.
+                        </p>
+                        <Link href="/staff/login" className="w-full">
+                            <Button className="w-full bg-green-600 hover:bg-green-700 text-white text-md h-12 shadow-md hover:shadow-lg transition-all rounded-xl flex items-center justify-center gap-2 group-hover:pr-4">
+                                Staff Login
+                                <ArrowRight className="h-4 w-4 opacity-70 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
+                            </Button>
+                        </Link>
+                    </div>
+
                     {/* Admin Card */}
                     <div className="group relative bg-white p-8 rounded-3xl shadow-xl shadow-blue-900/5 border border-slate-100 transition-all hover:-translate-y-1 hover:shadow-2xl hover:shadow-blue-900/10 flex flex-col items-center text-center">
-                        <div className="h-12 w-12 bg-blue-50 rounded-2xl flex items-center justify-center mb-6 text-blue-600 group-hover:scale-110 group-hover:bg-blue-100 transition-all">
+                        <div className="h-12 w-12 bg-slate-50 rounded-2xl flex items-center justify-center mb-6 text-slate-600 group-hover:scale-110 group-hover:bg-slate-100 transition-all">
                             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-building-2"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/><path d="M10 18h4"/></svg>
                         </div>
-                        <h2 className="text-2xl font-bold text-slate-800 mb-3">Staff & Admin</h2>
+                        <h2 className="text-2xl font-bold text-slate-800 mb-3">Admin Portal</h2>
                         <p className="text-slate-500 mb-8 flex-1">
-                            Access the global dashboard to verify reports, manage the registry, and view city-wide analytics.
+                            Access the global dashboard to manage the registry, view analytics, and monitor staff performance.
                         </p>
                         <Link href="/login?role=admin" className="w-full">
-                            <Button variant="outline" className="w-full border-blue-200 text-blue-700 hover:bg-blue-50 text-md h-12 transition-all rounded-xl flex items-center justify-center gap-2 group-hover:pr-4">
-                                Staff Login
+                            <Button variant="outline" className="w-full border-slate-200 text-slate-700 hover:bg-slate-50 text-md h-12 transition-all rounded-xl flex items-center justify-center gap-2 group-hover:pr-4">
+                                Admin Login
                                 <ArrowRight className="h-4 w-4 opacity-70 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
                             </Button>
                         </Link>
